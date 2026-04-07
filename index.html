@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Marker Automation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#111318;--card:#1c1f2e;--card2:#252838;--border:#2d3148;
+  --accent:#5b7fff;--accent2:#8b5cf6;--green:#22d3a0;--red:#f25050;
+  --yellow:#f59e0b;--text:#e4e8f5;--muted:#6b7599;--label:#8892b0;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+header{background:var(--card);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.logo{display:flex;align-items:center;gap:9px;}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.logo h1{font-size:15px;font-weight:700;}
+.logo h1 span{color:var(--accent);}
+.mode-toggle{display:flex;background:var(--bg);border-radius:7px;padding:3px;gap:2px;}
+.mode-btn{padding:5px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:none;color:var(--muted);transition:all .2s;}
+.mode-btn.active{background:var(--accent);color:#fff;}
+.srv{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11px;color:var(--muted);margin-left:auto;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);}
+.dot.on{background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+.hdr-btns{display:flex;gap:8px;}
+.start-btn{padding:7px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:7px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;}
+.start-btn:hover{opacity:.85;}
+.start-btn:disabled{opacity:.4;cursor:not-allowed;}
+.cancel-btn{padding:7px 16px;background:var(--red);border:none;border-radius:7px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:none;}
+.cancel-btn:hover{opacity:.85;}
+
+#recapBar{background:var(--card2);border-bottom:1px solid var(--border);padding:8px 20px;display:none;align-items:center;gap:14px;flex-shrink:0;}
+.drop-area{border:1.5px dashed var(--border);border-radius:7px;padding:6px 16px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .2s;}
+.drop-area:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── 패턴 확인 배너 ── */
+#pauseBanner{display:none;background:rgba(239,68,68,.12);border-bottom:2px solid #ef4444;flex-shrink:0;flex-direction:row;align-items:center;gap:16px;padding:10px 20px;}
+.pause-warning{font-size:14px;font-weight:800;color:#fca5a5;letter-spacing:.3px;flex:1;}
+.pause-warning strong{color:#f87171;font-size:15px;}
+.resume-btn{padding:7px 22px;background:#ef4444;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.resume-btn:hover{opacity:.85;}
+
+/* ── 수동 편집 배너 ── */
+#editBanner{display:none;background:rgba(91,127,255,.1);border-bottom:2px solid var(--accent);padding:10px 20px;flex-shrink:0;align-items:center;gap:12px;}
+.edit-msg{flex:1;font-size:12px;color:#93c5fd;line-height:1.5;}
+.edit-done-btn{padding:6px 18px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+
+.main-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+.top-row{display:flex;overflow-x:auto;overflow-y:hidden;padding:12px 20px 8px;gap:10px;flex-shrink:0;border-bottom:2px solid var(--border);}
+.top-card{width:220px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;}
+.top-card.active{border-color:var(--accent);}
+.top-card.inactive{opacity:.4;}
+.card-head{background:var(--card2);padding:8px 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.card-num{width:22px;height:22px;border-radius:5px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.card-title{flex:1;font-size:12px;color:var(--muted);}
+.ctog{width:18px;height:18px;border-radius:4px;border:1px solid var(--border);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;}
+.ctog.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.card-top-body{padding:10px 12px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;}
+.card-top-body::-webkit-scrollbar{width:3px;}
+.card-top-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.sec{font-size:9px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+.inp{background:var(--card2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 8px;font-size:12px;outline:none;width:100%;transition:border-color .15s;}
+.inp:focus{border-color:var(--accent);}
+.inp.sm{font-size:11px;padding:4px 7px;}
+select.inp{cursor:pointer;}
+.sz-group{font-size:9px;color:var(--muted);font-weight:600;margin:3px 0 2px;}
+.sz-row{display:grid;grid-template-columns:48px 1fr;gap:3px;align-items:center;}
+.sz-lbl{font-size:11px;color:var(--label);}
+.sz-inp{background:var(--card2);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:11px;outline:none;width:100%;}
+.sz-inp:focus{border-color:var(--accent);}
+.sz-inp.v{background:rgba(91,127,255,.09);border-color:rgba(91,127,255,.35);}
+/* 수량 입력 스피너(화살표) 제거 */
+.sz-inp::-webkit-inner-spin-button,.sz-inp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+.sz-inp{-moz-appearance:textfield;}
+hr.d{border:none;border-top:1px solid var(--border);margin:2px 0;}
+
+.bottom-row{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;padding:10px 20px;gap:10px;min-height:0;}
+.bot-card{width:220px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow-y:auto;padding:10px 12px;gap:8px;}
+.bot-card::-webkit-scrollbar{width:3px;}
+.bot-card::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.bot-card.active{border-color:var(--accent);}
+.bot-card.inactive{opacity:.4;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.cell{display:flex;flex-direction:column;gap:2px;}
+.cell-lbl{font-size:9px;color:var(--muted);}
+/* 상속된 값: 흐린 색 */
+.inherited{color:var(--muted) !important;}
+
+.pttn-card{flex:1;min-width:280px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.pttn-card::-webkit-scrollbar{width:3px;}
+.pttn-card::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.pttn-hint{font-size:11px;color:var(--muted);}
+.pttn-list{display:flex;flex-direction:column;gap:6px;}
+.pttn-item{display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;}
+.pttn-style{font-size:13px;font-weight:700;color:var(--text);min-width:48px;}
+.pttn-file-btn{padding:4px 10px;border:1.5px dashed var(--border);border-radius:5px;background:none;color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0;}
+.pttn-file-btn:hover{border-color:var(--accent);color:var(--accent);}
+.pttn-file-btn.loaded{border-style:solid;border-color:var(--green);color:var(--green);}
+.pttn-path-inp{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 7px;font-size:11px;outline:none;}
+.pttn-path-inp:focus{border-color:var(--accent);}
+.pttn-empty{font-size:12px;color:var(--muted);font-style:italic;}
+
+#statusPanel{background:var(--card);border-top:1px solid var(--border);padding:7px 20px;flex-shrink:0;}
+.prog-row{display:flex;align-items:center;gap:14px;}
+.prog-wrap{flex:1;}
+.prog-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px;}
+.prog-bar{background:var(--card2);border-radius:100px;height:4px;}
+.prog-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s;}
+.log-tog{font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap;}
+.log-tog:hover{color:var(--accent);}
+#logPanel{background:#090b12;border-top:1px solid var(--border);padding:8px 20px;height:110px;overflow-y:auto;font-family:'Consolas',monospace;font-size:11px;color:#64748b;display:none;flex-shrink:0;}
+.ll{padding:1px 0;}.ll.ok{color:var(--green);}.ll.err{color:var(--red);}.ll.info{color:var(--accent);}.ll.warn{color:var(--yellow);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🧵</div>
+    <h1>Mini Marker <span>Automation</span></h1>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" onclick="setMode('manual')">직접 입력</button>
+    <button class="mode-btn" onclick="setMode('recap')">Order Recap 불러오기</button>
+  </div>
+  <div class="srv">
+    <div class="dot" id="dot"></div>
+    <span id="srvTxt">서버 연결 중...</span>
+  </div>
+  <div class="hdr-btns">
+    <button class="start-btn" style="background:var(--card2);border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 14px;" onclick="openDemo10()" title="Demo10 실행">🖥 Demo10 열기</button>
+    <button class="start-btn" id="startBtn" onclick="startAll()">▶ 자동화 시작</button>
+    <button class="cancel-btn" id="cancelBtn" onclick="cancelAuto()">■ 취소</button>
+  </div>
+</header>
+
+<div id="recapBar">
+  <span style="font-size:12px;font-weight:600;color:var(--muted)">Order Recap</span>
+  <div class="drop-area" onclick="document.getElementById('recapFile').click()">📂 파일 클릭 또는 드래그</div>
+  <input type="file" id="recapFile" accept=".xlsx,.xls" style="display:none" onchange="loadRecap(this)">
+  <span id="recapName" style="font-size:11px;color:var(--muted)"></span>
+</div>
+
+<!-- 패턴 확인 배너 (경고 메세지만) -->
+<div id="pauseBanner">
+  <span class="pause-warning">⚠️ &nbsp;<strong>MARK 10에서 패턴을 확인하고 처리 방법을 선택하세요&nbsp;&nbsp;(소매 대칭 등)</strong></span>
+  <button class="resume-btn" onclick="resumeAuto()">▶ 계속</button>
+</div>
+
+<!-- 수동 편집 안내 배너 -->
+<div id="editBanner">
+  <span class="edit-msg" id="editMsg">Demo10에서 패턴을 수정하세요.<br>플립할 패턴 클릭 → 패턴 → 새 패턴 만들기 → 수평으로 플립 → 예<br>모든 수정 완료 후 아래 버튼을 클릭하세요.</span>
+  <button class="edit-done-btn" onclick="editDone()">✅ 수정 완료</button>
+</div>
+
+<div class="main-wrap">
+  <div class="top-row" id="topRow"></div>
+  <div class="bottom-row" id="botRow"></div>
+</div>
+
+<div id="statusPanel">
+  <div class="prog-row">
+    <div class="prog-wrap">
+      <div class="prog-lbl"><span id="progLabel">대기 중</span><span id="progPct">0%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    </div>
+    <span class="log-tog" onclick="toggleLog()">📋 로그</span>
+  </div>
+</div>
+<div id="logPanel"></div>
+
+<script>
+const SERVER  = 'http://127.0.0.1:5055';
+const REG     = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL','6XL'];
+const TALL    = ['LTLL','XLTLL','2XLTLL','3XLTLL','4XLTLL','5XLTLL'];
+const ALL     = [...REG, ...TALL];
+const STYLES  = ['K87','K128','K231','K84','K126'];
+
+let mode='manual', polling=null, lastLogLen=0, dxfPaths={};
+let waitingForEdit = false;  // 수동 편집 대기 중 여부
+
+// ── 서버 체크 ─────────────────────────────────────────────────────────────
+async function checkServer(){
+  try{
+    const r=await fetch(SERVER+'/status',{signal:AbortSignal.timeout(2000)});
+    if(r.ok){document.getElementById('dot').className='dot on';document.getElementById('srvTxt').textContent='서버 연결됨';return true;}
+  }catch(e){}
+  document.getElementById('dot').className='dot';
+  document.getElementById('srvTxt').textContent='run.bat 실행 필요';
+  return false;
+}
+setInterval(checkServer,3000);checkServer();
+
+// ── 키보드 네비게이션 (수량 입력칸) ──────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  const el = e.target;
+  if(!el.classList.contains('sz-inp')) return;
+  if(!['Enter','ArrowDown','ArrowUp'].includes(e.key)) return;
+  e.preventDefault();
+  const all=[...document.querySelectorAll('.sz-inp')];
+  const idx=all.indexOf(el);
+  const next=e.key==='ArrowUp'?idx-1:idx+1;
+  if(next>=0&&next<all.length){all[next].focus();all[next].select();}
+});
+
+// ── 카드 생성 ─────────────────────────────────────────────────────────────
+function makeTopCard(i){
+  const d=document.createElement('div');
+  d.className='top-card'+(i===0?' active':' inactive');d.id='tc'+i;
+  const togCls=i===0?'ctog on':'ctog';
+  const togTxt=i===0?'✓':'−';
+  d.innerHTML=`
+  <div class="card-head">
+    <div class="card-num">${i+1}</div>
+    <span class="card-title" id="ctitle${i}">PO ${i+1}</span>
+    <button class="${togCls}" id="ctog${i}" onclick="toggleCard(${i})">${togTxt}</button>
+  </div>
+  <div class="card-top-body">
+    <div class="sec">Style #</div>
+    <select class="inp" id="stylesel${i}" onchange="onStyleSel(${i})">
+      <option value="">-- 선택 --</option>
+      ${STYLES.map(s=>`<option value="${s}">${s}</option>`).join('')}
+      <option value="__direct__">직접 입력</option>
+    </select>
+    <input type="text" class="inp sm" id="style${i}" placeholder="Style# 입력" style="display:none;margin-top:3px" oninput="onStyleChange(${i})">
+    <hr class="d">
+    <div class="sec">Size / PCS</div>
+    <div class="sz-group">Regular</div>
+    ${REG.map(s=>`<div class="sz-row"><span class="sz-lbl">${s}</span><input type="number" class="sz-inp" id="q${i}_${s}" min="0" placeholder="0" oninput="onQty(this)"></div>`).join('')}
+    <div class="sz-group" style="margin-top:5px">Tall</div>
+    ${TALL.map(s=>`<div class="sz-row"><span class="sz-lbl">${s}</span><input type="number" class="sz-inp" id="q${i}_${s}" min="0" placeholder="0" oninput="onQty(this)"></div>`).join('')}
+  </div>`;
+  return d;
+}
+
+function makeBotCard(i){
+  const d=document.createElement('div');
+  d.className='bot-card'+(i===0?' active':' inactive');d.id='bc'+i;
+  // PO1만 기본값, PO2~5는 공란(placeholder만)
+  const w   = i===0?'value="74"'  :'placeholder="74"';
+  const ml  = i===0?'value="11"'  :'placeholder="11"';
+  const buf = i===0?'value="0.125"':'placeholder="0.125"';
+  const m1  = i===0?'value="1"'   :'placeholder="1"';
+  const m2  = i===0?'value="5"'   :'placeholder="5"';
+  const hint= i>0?'<span style="font-size:9px;color:var(--muted);margin-left:4px">(Style# 입력 시 PO1 기준 자동 입력)</span>':'';
+  d.innerHTML=`
+    <div class="sec" style="display:flex;align-items:center">원단 설정${hint}</div>
+    <div class="row2">
+      <div class="cell">
+        <span class="cell-lbl">폭 (inches)</span>
+        <input class="inp sm" type="number" id="width${i}" ${w} oninput="onFabricChange(this,${i})">
+      </div>
+      <div class="cell">
+        <span class="cell-lbl">최대 기장 (yds)</span>
+        <input class="inp sm" type="number" id="maxlen${i}" ${ml} step="0.5" oninput="onFabricChange(this,${i})">
+      </div>
+    </div>
+    <div class="cell">
+      <span class="cell-lbl">버퍼 (inches)</span>
+      <input class="inp sm" type="text" id="buf${i}" ${buf} oninput="onFabricChange(this,${i})">
+    </div>
+    <hr class="d">
+    <div class="sec">네스팅 시간</div>
+    <div class="row2">
+      <div class="cell"><span class="cell-lbl">1단계 (분)</span><input class="inp sm" type="number" id="m1_${i}" ${m1} min="1" oninput="onFabricChange(this,${i})"></div>
+      <div class="cell"><span class="cell-lbl">2단계 (분)</span><input class="inp sm" type="number" id="m2_${i}" ${m2} min="1" oninput="onFabricChange(this,${i})"></div>
+    </div>`;
+  return d;
+}
+
+function makePttnCard(){
+  const d=document.createElement('div');d.className='pttn-card';
+  d.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="sec">패턴 불러오기</span>
+      <span class="pttn-hint">Style# 선택 시 자동 생성</span>
+    </div>
+    <div class="pttn-list" id="pttnList">
+      <span class="pttn-empty">위 카드에 Style#을 선택하면 목록이 생성됩니다</span>
+    </div>`;
+  return d;
+}
+
+function init(){
+  const top=document.getElementById('topRow');
+  const bot=document.getElementById('botRow');
+  for(let i=0;i<5;i++){top.appendChild(makeTopCard(i));bot.appendChild(makeBotCard(i));}
+  bot.appendChild(makePttnCard());
+}
+init();
+
+// ── PO1 원단설정 → PO2~5 상속 ─────────────────────────────────────────────
+const FABRIC_FIELDS=['width','maxlen','buf','m1_','m2_'];
+
+function inheritFromPO1(cardIdx){
+  if(!document.getElementById('tc0').classList.contains('active'))return;
+  FABRIC_FIELDS.forEach(f=>{
+    const src=document.getElementById(f+'0');
+    const tgt=document.getElementById(f+cardIdx);
+    if(!src||!tgt)return;
+    if(tgt.dataset.manual)return;  // 수동 변경됐으면 건드리지 않음
+    tgt.value=src.value;
+    tgt.classList.add('inherited');
+  });
+}
+
+function onFabricChange(el,cardIdx){
+  el.dataset.manual='1';
+  el.classList.remove('inherited');
+  // PO1이 바뀌면 상속 안된 PO2~5도 갱신
+  if(cardIdx===0){
+    for(let i=1;i<5;i++){
+      if(!document.getElementById('tc'+i).classList.contains('active'))continue;
+      if(!getStyle(i))continue;
+      FABRIC_FIELDS.forEach(f=>{
+        const tgt=document.getElementById(f+i);
+        if(tgt&&!tgt.dataset.manual){
+          tgt.value=el.id.startsWith(f)?el.value:document.getElementById(f+'0').value;
+          tgt.classList.add('inherited');
+        }
+      });
+    }
+  }
+}
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────
+function onQty(el){el.classList.toggle('v',!!(el.value&&+el.value>0));}
+
+function activateCard(i){
+  const tc=document.getElementById('tc'+i);
+  const bc=document.getElementById('bc'+i);
+  const t =document.getElementById('ctog'+i);
+  if(!tc.classList.contains('active')){
+    tc.classList.replace('inactive','active');
+    bc.classList.replace('inactive','active');
+    t.textContent='✓'; t.className='ctog on';
+  }
+}
+
+function onStyleSel(i){
+  const sel=document.getElementById('stylesel'+i);
+  const inp=document.getElementById('style'+i);
+  if(sel.value==='__direct__'){
+    inp.style.display='block';inp.value='';inp.focus();
+  } else if(sel.value){
+    inp.style.display='none';inp.value=sel.value;
+    document.getElementById('ctitle'+i).textContent=sel.value;
+    if(i>0){activateCard(i);inheritFromPO1(i);}
+    updatePttnList();
+  } else {
+    // 선택 해제
+    inp.style.display='none';inp.value='';
+    document.getElementById('ctitle'+i).textContent='PO '+(i+1);
+    updatePttnList();
+  }
+}
+
+function onStyleChange(i){
+  const v=document.getElementById('style'+i).value.trim();
+  document.getElementById('ctitle'+i).textContent=v||('PO '+(i+1));
+  if(v&&i>0){activateCard(i);inheritFromPO1(i);}
+  updatePttnList();
+}
+
+function getStyle(i){
+  const sel=document.getElementById('stylesel'+i);
+  const inp=document.getElementById('style'+i);
+  return(sel.value&&sel.value!=='__direct__'?sel.value:inp.value).trim();
+}
+
+function toggleCard(i){
+  const tc=document.getElementById('tc'+i);
+  const bc=document.getElementById('bc'+i);
+  const t=document.getElementById('ctog'+i);
+  const active=tc.classList.contains('active');
+  [tc,bc].forEach(c=>{if(active)c.classList.replace('active','inactive');else c.classList.replace('inactive','active');});
+  t.textContent=active?'−':'✓';t.className=active?'ctog':'ctog on';
+  updatePttnList();
+}
+
+function updatePttnList(){
+  const styles=new Set();
+  for(let i=0;i<5;i++){
+    if(!document.getElementById('tc'+i).classList.contains('active'))continue;
+    const s=getStyle(i);if(s)styles.add(s);
+  }
+  const list=document.getElementById('pttnList');
+  if(!styles.size){list.innerHTML='<span class="pttn-empty">위 카드에 Style#을 선택하면 목록이 생성됩니다</span>';return;}
+  const newP={};styles.forEach(s=>{newP[s]=dxfPaths[s]||'';});dxfPaths=newP;
+  list.innerHTML=[...styles].map(s=>`
+    <div class="pttn-item" id="pi_${s}">
+      <span class="pttn-style">${s}</span>
+      <label class="pttn-file-btn${dxfPaths[s]?' loaded':''}" id="pb_${s}">
+        ${dxfPaths[s]?'✓ '+dxfNames[s]:'📂 클릭 또는 드롭'}
+        <input type="file" accept=".dxf" style="display:none" id="pf_${s}" onchange="onDxf('${s}',this)">
+      </label>
+      <button onclick="clearDxf('${s}')" title="삭제"
+        style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='var(--red)';this.style.color='#fff';this.style.borderColor='var(--red)'"
+        onmouseout="this.style.background='none';this.style.color='var(--muted)';this.style.borderColor='var(--border)'">✕</button>
+    </div>`).join('');
+}
+
+function getFolder(){ return ''; }  // 더 이상 사용 안 함
+
+// dxfNames: 표시용 원본 파일명
+let dxfNames = {};
+
+async function onDxf(style, inp){
+  const f = inp.files[0]; if(!f) return;
+  await uploadDxf(style, f);
+}
+
+async function uploadDxf(style, file){
+  const pb = document.getElementById('pb_'+style);
+  if(pb){ pb.className='pttn-file-btn'; pb.innerHTML='⏳ 업로드 중...<input type="file" accept=".dxf" style="display:none" id="pf_'+style+'" onchange="onDxf(\''+style+'\',this)">'; }
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('style', style);
+  try{
+    const r = await fetch(SERVER+'/upload_dxf', {method:'POST', body:fd});
+    const data = await r.json();
+    if(data.path){
+      dxfPaths[style] = data.path;
+      dxfNames[style] = file.name;
+      if(pb){ pb.className='pttn-file-btn loaded'; pb.innerHTML='✓ '+file.name+'<input type="file" accept=".dxf" style="display:none" id="pf_'+style+'" onchange="onDxf(\''+style+'\',this)">'; }
+      addLog('✅ '+style+' → '+file.name, 'ok');
+    } else {
+      if(pb){ pb.className='pttn-file-btn'; pb.innerHTML='❌ 실패 — 재시도<input type="file" accept=".dxf" style="display:none" id="pf_'+style+'" onchange="onDxf(\''+style+'\',this)">'; }
+      addLog('업로드 실패: '+(data.error||'서버 오류'), 'err');
+    }
+  } catch(e){
+    if(pb){ pb.className='pttn-file-btn'; pb.innerHTML='📂 클릭 또는 드롭<input type="file" accept=".dxf" style="display:none" id="pf_'+style+'" onchange="onDxf(\''+style+'\',this)">'; }
+    addLog('업로드 오류: '+e.message, 'err');
+  }
+}
+
+function clearDxf(style){
+  dxfPaths[style]=''; dxfNames[style]='';
+  const pb=document.getElementById('pb_'+style);
+  if(pb){ pb.className='pttn-file-btn'; pb.innerHTML='📂 클릭 또는 드롭<input type="file" accept=".dxf" style="display:none" id="pf_'+style+'" onchange="onDxf(\''+style+'\',this)">'; }
+}
+
+function setupDrop(){
+  document.addEventListener('dragenter', e=>e.preventDefault());
+  document.addEventListener('dragleave', e=>e.preventDefault());
+  document.addEventListener('dragover',  e=>e.preventDefault());
+  document.addEventListener('drop', e=>{
+    e.preventDefault();
+    const files=[...(e.dataTransfer.files||[])].filter(f=>f.name.toLowerCase().endsWith('.dxf'));
+    if(!files.length){ addLog('DXF 파일만 드롭할 수 있습니다','warn'); return; }
+    const styleList = Object.keys(dxfPaths);
+    if(!styleList.length){ addLog('Style#을 먼저 선택하세요','warn'); return; }
+    files.forEach(f=>{
+      const matched = styleList.find(s=>f.name.toUpperCase().includes(s.toUpperCase()));
+      const style   = matched || styleList.find(s=>!dxfPaths[s]) || styleList[0];
+      uploadDxf(style, f);
+    });
+  });
+}
+setupDrop();
+
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&m==='manual')||(i===1&&m==='recap')));
+  document.getElementById('recapBar').style.display=m==='recap'?'flex':'none';
+}
+
+// ── Order Recap ──────────────────────────────────────────────────────────
+function loadRecap(inp){
+  const file=inp.files[0];if(!file)return;
+  document.getElementById('recapName').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let poRow=-1,poCols=[];
+      for(let r=0;r<data.length;r++){
+        const m=data[r].map((c,i)=>({c:String(c).trim(),i})).filter(x=>x.c.match(/^\d{9,10}$/));
+        if(m.length){poRow=r;poCols=m.slice(0,5);break;}
+      }
+      if(poRow<0){addLog('PO번호 못 찾음','err');return;}
+      let szRow=-1;
+      for(let r=poRow;r<Math.min(poRow+10,data.length);r++){
+        if(data[r]&&data[r].some(c=>c==='XS'||c==='S'||c==='LTLL')){szRow=r;break;}
+      }
+      if(szRow<0){addLog('사이즈 행 못 찾음','err');return;}
+      const styleRow=data[poRow-1]||[];
+      poCols.forEach(({c:po,i:col},ci)=>{
+        const style=String(styleRow[col]||'').trim();
+        const sel=document.getElementById('stylesel'+ci);
+        if(STYLES.includes(style)){sel.value=style;}
+        else{sel.value='__direct__';document.getElementById('style'+ci).value=style;document.getElementById('style'+ci).style.display='block';}
+        document.getElementById('ctitle'+ci).textContent=style||po;
+        for(let r=szRow;r<Math.min(szRow+25,data.length);r++){
+          const row=data[r];const sz=String(row[1]||row[0]||'').trim();if(!sz)break;
+          if(ALL.includes(sz)){const el=document.getElementById('q'+ci+'_'+sz);if(el){el.value=parseInt(row[col])||0;onQty(el);}}
+        }
+        if(ci>0)inheritFromPO1(ci);
+        ['tc','bc'].forEach(p=>{const c=document.getElementById(p+ci);if(c.classList.contains('inactive'))c.classList.replace('inactive','active');});
+        document.getElementById('ctog'+ci).textContent='✓';document.getElementById('ctog'+ci).className='ctog on';
+      });
+      for(let i=poCols.length;i<5;i++){
+        ['tc','bc'].forEach(p=>{const c=document.getElementById(p+i);if(c.classList.contains('active'))c.classList.replace('active','inactive');});
+        document.getElementById('ctog'+i).textContent='−';document.getElementById('ctog'+i).className='ctog';
+      }
+      updatePttnList();
+      addLog('Order Recap 로드 완료 — '+poCols.length+'개 PO','ok');
+    }catch(err){addLog('파싱 오류: '+err.message,'err');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── 자동화 시작/취소 ──────────────────────────────────────────────────────
+async function openDemo10(){
+  try{
+    const r=await fetch(SERVER+'/open_demo10',{method:'POST'});
+    const d=await r.json();
+    if(d.ok) addLog('Demo10 실행 중...','info');
+    else addLog('Demo10 오류: '+(d.error||'실행 파일을 찾을 수 없습니다'),'err');
+  }catch(e){addLog('서버 연결 안 됨 — run.bat 먼저 실행하세요','err');}
+}
+
+async function startAll(){
+  const ok=await checkServer();
+  if(!ok){alert('run.bat을 먼저 실행하세요!');return;}
+  const cards=[];
+  for(let i=0;i<5;i++){
+    if(!document.getElementById('tc'+i).classList.contains('active'))continue;
+    const style=getStyle(i);
+    if(!style){alert((i+1)+'번: Style# 선택하세요');return;}
+    const dxf=dxfPaths[style]||document.getElementById('pp_'+style)?.value||'';
+    if(!dxf){alert(style+' DXF 경로를 패턴 섹션에 입력하세요');return;}
+    const sizes={};
+    ALL.forEach(s=>{const v=+document.getElementById('q'+i+'_'+s).value||0;if(v>0)sizes[s]=v;});
+    if(!Object.keys(sizes).length)continue;
+    // 최대 기장: yds → inches 변환 (×36)
+    const maxYds=+document.getElementById('maxlen'+i).value||11;
+    cards.push({
+      po:'PO'+(i+1),style,sizes,dxf_path:dxf,
+      width:   +document.getElementById('width'+i).value,
+      length:  Math.round(maxYds*36),   // yds → inches
+      buffer:   document.getElementById('buf'+i).value,
+      phase1_min: +document.getElementById('m1_'+i).value,
+      phase2_min: +document.getElementById('m2_'+i).value,
+    });
+  }
+  if(!cards.length){alert('실행할 PO가 없습니다');return;}
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('cancelBtn').style.display='block';
+  lastLogLen=0;setProgress(5,'준비 중...');
+  addLog(cards.length+'개 PO 시작','info');
+  for(const c of cards){
+    try{await fetch(SERVER+'/start_automation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});}
+    catch(e){addLog('오류: '+e.message,'err');}
+  }
+  if(polling)clearInterval(polling);
+  polling=setInterval(pollStatus,1500);
+}
+
+async function cancelAuto(){
+  try{await fetch(SERVER+'/cancel',{method:'POST'});}catch(e){}
+  clearInterval(polling);
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('cancelBtn').style.display='none';
+  document.getElementById('pauseBanner').style.display='none';
+  document.getElementById('editBanner').style.display='none';
+  waitingForEdit=false;
+  addLog('취소됨','warn');setProgress(0,'취소됨');
+}
+
+// ── 패턴 확인 배너 처리 ──────────────────────────────────────────────────
+async function resumeAuto(){
+  document.getElementById('pauseBanner').style.display='none';
+  waitingForEdit=false;
+  try{await fetch(SERVER+'/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'auto'})});}catch(e){}
+}
+
+async function editDone(){
+  // 수동 편집 완료 → 두 번째 /resume 호출
+  document.getElementById('editBanner').style.display='none';
+  waitingForEdit=false;
+  addLog('▶ 수동 편집 완료, 재개','info');
+  try{await fetch(SERVER+'/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'done'})});}catch(e){}
+}
+
+// ── 폴링 ────────────────────────────────────────────────────────────────
+async function pollStatus(){
+  try{
+    const r=await fetch(SERVER+'/status');
+    const data=await r.json();
+
+    const logs=data.logs||[];
+    if(logs.length>lastLogLen){
+      logs.slice(lastLogLen).forEach(l=>{
+        const cls=l.includes('✅')||l.includes('완료')?'ok':l.includes('❌')||l.includes('오류')||l.includes('실패')?'err':l.includes('⚠')||l.includes('⏸')?'warn':'';
+        addLog(l,cls);updateProgressFromLog(l);
+      });
+      lastLogLen=logs.length;
+    }
+
+    // 패턴 확인 배너
+    if(data.paused&&!waitingForEdit){
+      document.getElementById('pauseBanner').style.display='flex';
+    } else if(!data.paused&&!waitingForEdit){
+      document.getElementById('pauseBanner').style.display='none';
+    }
+
+    if(data.progress!=null)setProgress(data.progress,data.step||'');
+
+    if(!data.running&&lastLogLen>0){
+      clearInterval(polling);
+      document.getElementById('startBtn').disabled=false;
+      document.getElementById('cancelBtn').style.display='none';
+      document.getElementById('editBanner').style.display='none';
+      waitingForEdit=false;
+      if(logs.some(l=>l.includes('완료')))setProgress(100,'완료!');
+    }
+  }catch(e){}
+}
+
+function updateProgressFromLog(log){
+  if(log.includes('[1]'))setProgress(10,'DXF 임포트');
+  else if(log.includes('[2]'))setProgress(30,'마커 크기');
+  else if(log.includes('패턴 확인'))setProgress(42,'패턴 확인');
+  else if(log.includes('[4]'))setProgress(55,'패턴 회전');
+  else if(log.includes('[5]'))setProgress(70,'프로퍼티스');
+  else if(log.includes('[6]'))setProgress(85,'네스팅');
+  else if(log.includes('완료'))setProgress(100,'완료!');
+}
+
+function setProgress(pct,label){
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progPct').textContent=pct+'%';
+  if(label)document.getElementById('progLabel').textContent=label;
+}
+
+let logOpen=false;
+function toggleLog(){logOpen=!logOpen;document.getElementById('logPanel').style.display=logOpen?'block':'none';}
+function addLog(msg,cls=''){
+  const box=document.getElementById('logPanel');
+  const d=document.createElement('div');d.className='ll'+(cls?' '+cls:'');
+  const t=new Date().toLocaleTimeString('ko',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  d.textContent=msg.match(/^\[\d{2}:\d{2}:\d{2}\]/)?msg:'['+t+'] '+msg;
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+  if(!logOpen&&cls&&cls!==''){logOpen=true;document.getElementById('logPanel').style.display='block';}
+}
+</script>
+</body>
+</html>
